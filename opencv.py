@@ -3,7 +3,7 @@ import threading
 import cv2
 
 CAM_IP = "10.91.21.160"  
-STREAM_URL = f"http://{10.91.21.160}:81/stream"
+STREAM_URL = f"http://10.91.21.160:81/stream"
 
 UDP_IP = "0.0.0.0"
 UDP_PORT = 12345
