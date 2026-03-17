@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robot Command Center</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 50px;
+        }
+        h1 { color: #00e676; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat({{ robot_map[0]|length }}, 50px);
+            gap: 5px;
+            margin: 20px 0;
+            background-color: #1e1e1e;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .cell {
+            width: 50px; height: 50px;
+            background-color: #333;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .cell:hover { background-color: #555; }
+        .cell.obstacle { background-color: #ff3d00; cursor: not-allowed; }
+        .cell.start { background-color: #00e676; }
+        .cell.goal { background-color: #2979ff; }
+        .cell.path { background-color: #ffea00; }
+        
+        .controls { margin-top: 20px; }
+        button {
+            background-color: #00e676;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 230, 118, 0.3);
+            transition: 0.2s;
+        }
+        button:hover { background-color: #00c853; transform: translateY(-2px); }
+        #status { margin-top: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Robot Command Center</h1>
+    <p>Click once for <b>Start</b> (Green), click again for <b>Goal</b> (Blue).</p>
+
+    <div class="grid" id="mapGrid">
+        {% for r in range(robot_map|length) %}
+            {% for c in range(robot_map[0]|length) %}
+                <div class="cell {% if robot_map[r][c] == 1 %}obstacle{% endif %}" 
+                     data-r="{{ r }}" data-c="{{ c }}" onclick="handleCellClick(this)"></div>
+            {% endfor %}
+        {% endfor %}
+    </div>
+
+    <div class="controls">
+        <button onclick="dispatchRobot()">Dispatch Robot</button>
+        <button onclick="resetMap()" style="background-color: #444; color: white; margin-left: 10px;">Reset</button>
+    </div>
+
+    <div id="status">Ready for orders.</div>
+
+    <script>
+        let start = null;
+        let goal = null;
+
+        function handleCellClick(cell) {
+            if (cell.classList.contains('obstacle')) return; // Can't click walls
+
+            let r = parseInt(cell.getAttribute('data-r'));
+            let c = parseInt(cell.getAttribute('data-c'));
+
+            if (!start) {
+                start = [r, c];
+                cell.classList.add('start');
+                document.getElementById('status').innerText = `Start set at [${r}, ${c}]. Select Goal.`;
+            } else if (!goal && (start[0] !== r || start[1] !== c)) {
+                goal = [r, c];
+                cell.classList.add('goal');
+                document.getElementById('status').innerText = `Goal set at [${r}, ${c}]. Ready to dispatch.`;
+            }
+        }
+
+        function resetMap() {
+            start = null; goal = null;
+            document.querySelectorAll('.cell').forEach(c => {
+                c.classList.remove('start', 'goal', 'path');
+            });
+            document.getElementById('status').innerText = "Ready for orders.";
+        }
+
+        async function dispatchRobot() {
+            if (!start || !goal) {
+                document.getElementById('status').innerText = "Please select both a Start and a Goal!";
+                return;
+            }
+
+            document.getElementById('status').innerText = "Calculating path...";
+
+            const response = await fetch('/calculate_path', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start: start, goal: goal })
+            });
+            const data = await response.json();
+
+            if (data.status === "success") {
+                document.getElementById('status').innerText = "Path found! Transmitting to robot...";
+                // Draw the path on the grid
+                data.path.forEach(pos => {
+                    let r = pos[0], c = pos[1];
+                    let cell = document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+                    if (!cell.classList.contains('start') && !cell.classList.contains('goal')) {
+                        cell.classList.add('path');
+                    }
+                });
+            } else {
+                document.getElementById('status').innerText = data.message;
+                document.getElementById('status').style.color = "#ff3d00";
+            }
+        }
+    </script>
+</body>
+</html>
